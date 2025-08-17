@@ -5,12 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1" />
   <title>CRUSH MO BAKO???</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
     body {
       min-height: 100vh;
@@ -47,7 +42,7 @@
     }
 
     @keyframes titleGlow {
-      0%, 100% { filter: brightness(1); }
+      0%,100% { filter: brightness(1); }
       50% { filter: brightness(1.3); }
     }
 
@@ -87,7 +82,7 @@
     }
 
     @keyframes yesGlow {
-      0%, 100% { transform: scale(1); }
+      0%,100% { transform: scale(1); }
       50% { transform: scale(1.05); }
     }
 
@@ -106,7 +101,7 @@
       justify-content: center;
     }
 
-    /* Lightweight floating message */
+    /* Floating message */
     .message {
       position: fixed;
       top: 20px;
@@ -122,30 +117,23 @@
       transition: opacity 0.3s ease;
       z-index: 1000;
     }
-
     .message.show { opacity: 1; }
 
-    /* Heart particles (CSS animation instead of constant JS DOM churn) */
-    .heart-particle {
-      position: absolute;
-      font-size: 20px;
-      opacity: 0;
-      animation: heartFloat 2.5s ease forwards;
-      will-change: transform, opacity;
+    /* Canvas covers whole screen for heart */
+    #heartCanvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 50;
+      pointer-events: none;
     }
 
-    @keyframes heartFloat {
-      0% { opacity: 0; transform: scale(0.5) translateY(0); }
-      20% { opacity: 1; transform: scale(1.1) translateY(-10px); }
-      100% { opacity: 0; transform: scale(0.6) translateY(-80px); }
-    }
-
-    /* Celebration overlay */
+    /* Celebration */
     .celebration {
       position: fixed;
       top: 0; left: 0;
       width: 100%; height: 100%;
-      background: rgba(0,0,0,0.6); /* visible bg instead of blur */
+      background: rgba(0,0,0,0.6);
       display: none;
       align-items: center;
       justify-content: center;
@@ -175,6 +163,7 @@
       font-size: 16px;
       animation: confettiFall 3s ease-out forwards;
       will-change: transform, opacity;
+      z-index: 1999;
     }
 
     @keyframes confettiFall {
@@ -182,10 +171,9 @@
       100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
     }
 
-    /* Mobile tweaks */
+    /* Mobile */
     @media (max-width: 480px) {
       .btn { padding: 14px 26px; font-size: 15px; }
-      .heart-particle { font-size: 16px; }
       .celebration-content { padding: 20px; }
     }
   </style>
@@ -205,87 +193,145 @@
   </div>
 
   <div class="message" id="message"></div>
+  <canvas id="heartCanvas"></canvas>
+
   <div class="celebration" id="celebration">
-    <div class="celebration-content" id="celebrationContent">ALAM KO NAMAN! 💖</div>
+    <div class="celebration-content" id="celebrationContent">
+      ALAM KO NAMAN! 💖<br>
+      <small style="font-size: 0.7em; font-weight: 600; opacity: 0.8;">Crush mo rin pala ako! 😍</small>
+    </div>
   </div>
 
   <script>
-    class CrushGame {
-      constructor() {
-        this.yesBtn = document.getElementById("yesBtn");
-        this.maybeBtn = document.getElementById("maybeBtn");
-        this.noBtn = document.getElementById("noBtn");
-        this.message = document.getElementById("message");
-        this.celebration = document.getElementById("celebration");
-        this.celebrationContent = document.getElementById("celebrationContent");
+  class MegaHeart {
+    constructor() {
+      this.canvas = document.getElementById("heartCanvas");
+      this.ctx = this.canvas.getContext("2d");
+      this.resize();
+      window.addEventListener("resize", () => this.resize());
 
-        this.dodgeMsgs = ["Ayaw mo talaga? 🥺","Sige na please! 💕","Hindi ka susuko? 😤","Alam kong gusto mo! 😏"];
-        this.init();
+      this.points = this.generateHeartPath(220);
+      this.particles = [];
+      this.index = 0;
+      this.running = false;
+    }
+
+    resize() {
+      this.canvas.width = window.innerWidth;
+      this.canvas.height = window.innerHeight;
+    }
+
+    generateHeartPath(steps) {
+      const path = [];
+      const cx = this.canvas.width / 2;
+      const cy = this.canvas.height / 2;
+      const scale = Math.min(this.canvas.width, this.canvas.height) * 0.05;
+
+      for (let i = 0; i < steps; i++) {
+        const t = (i / steps) * 2 * Math.PI;
+        const x = 16 * Math.pow(Math.sin(t), 3);
+        const y = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+        path.push({ x: cx + x * scale, y: cy + y * scale });
       }
+      return path;
+    }
 
-      init() {
-        this.yesBtn.addEventListener("click", () => this.handleYes());
-        [this.maybeBtn, this.noBtn].forEach(btn => {
-          btn.addEventListener("mouseenter", () => this.dodge(btn));
-          btn.addEventListener("touchstart", e => { e.preventDefault(); this.dodge(btn); });
-        });
-      }
+    start() {
+      this.running = true;
+      this.loop();
+    }
 
-      dodge(btn) {
-        this.showMsg(this.dodgeMsgs[Math.floor(Math.random()*this.dodgeMsgs.length)]);
-        const x = Math.random() * (window.innerWidth - btn.offsetWidth);
-        const y = Math.random() * (window.innerHeight - btn.offsetHeight - 50);
-        btn.style.position = "fixed";
-        btn.style.left = `${x}px`;
-        btn.style.top = `${y}px`;
-      }
+    stop() { this.running = false; }
 
-      showMsg(text) {
-        this.message.textContent = text;
-        this.message.classList.add("show");
-        setTimeout(() => this.message.classList.remove("show"), 2000);
-      }
+    loop() {
+      if (!this.running) return;
+      requestAnimationFrame(() => this.loop());
 
-      handleYes() {
-        this.yesBtn.textContent = "YESSS! 💖✨";
-        this.spawnHearts();
-        setTimeout(() => this.showCelebration(), 2500);
-        this.spawnConfetti();
-      }
+      this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
 
-      spawnHearts() {
-        for (let i=0; i<25; i++) {
-          setTimeout(() => {
-            const h = document.createElement("div");
-            h.className = "heart-particle";
-            h.textContent = ["💖","💕","❤️","💜"][Math.floor(Math.random()*4)];
-            h.style.left = (window.innerWidth/2 + (Math.random()*60-30)) + "px";
-            h.style.top = (window.innerHeight/2) + "px";
-            document.body.appendChild(h);
-            setTimeout(()=>h.remove(),2500);
-          }, i*120);
-        }
-      }
+      // spawn a particle on current path index
+      const pos = this.points[this.index];
+      this.particles.push({ x: pos.x, y: pos.y, life: 1 });
+      this.index = (this.index + 1) % this.points.length;
 
-      showCelebration() {
-        this.celebration.style.display = "flex";
-        setTimeout(()=> this.celebration.style.display="none", 4000);
-      }
+      // draw particles
+      this.particles.forEach(p => {
+        this.ctx.globalAlpha = p.life;
+        this.ctx.fillStyle = ["#ff4f81","#ff7eb9","#ffb347","#ff65a3","#ff1493"][Math.floor(Math.random()*5)];
+        this.ctx.font = "20px Arial";
+        this.ctx.fillText("❤", p.x, p.y);
+        p.life -= 0.015;
+      });
+      this.particles = this.particles.filter(p => p.life > 0);
+    }
+  }
 
-      spawnConfetti() {
-        for (let i=0; i<15; i++) {
-          setTimeout(() => {
-            const c = document.createElement("div");
-            c.className="confetti-piece";
-            c.textContent=["🎉","✨","💖","🎊"][Math.floor(Math.random()*4)];
-            c.style.left = Math.random()*window.innerWidth + "px";
-            document.body.appendChild(c);
-            setTimeout(()=>c.remove(),3000);
-          }, i*150);
-        }
+  class CrushGame {
+    constructor() {
+      this.yesBtn = document.getElementById("yesBtn");
+      this.maybeBtn = document.getElementById("maybeBtn");
+      this.noBtn = document.getElementById("noBtn");
+      this.message = document.getElementById("message");
+      this.celebration = document.getElementById("celebration");
+      this.celebrationContent = document.getElementById("celebrationContent");
+
+      this.dodgeMsgs = ["Ayaw mo talaga? 🥺","Sige na please! 💕","Hindi ka susuko? 😤","Alam kong gusto mo! 😏"];
+      this.heart = new MegaHeart();
+      this.init();
+    }
+
+    init() {
+      this.yesBtn.addEventListener("click", () => this.handleYes());
+      [this.maybeBtn, this.noBtn].forEach(btn => {
+        btn.addEventListener("mouseenter", () => this.dodge(btn));
+        btn.addEventListener("touchstart", e => { e.preventDefault(); this.dodge(btn); });
+      });
+    }
+
+    dodge(btn) {
+      this.showMsg(this.dodgeMsgs[Math.floor(Math.random()*this.dodgeMsgs.length)]);
+      const x = Math.random() * (window.innerWidth - btn.offsetWidth);
+      const y = Math.random() * (window.innerHeight - btn.offsetHeight - 50);
+      btn.style.position = "fixed";
+      btn.style.left = `${x}px`;
+      btn.style.top = `${y}px`;
+    }
+
+    showMsg(text) {
+      this.message.textContent = text;
+      this.message.classList.add("show");
+      setTimeout(() => this.message.classList.remove("show"), 2000);
+    }
+
+    handleYes() {
+      this.yesBtn.textContent = "YESSS! 💖✨";
+      this.maybeBtn.style.display = "none";
+      this.noBtn.style.display = "none";
+
+      this.heart.start();
+      setTimeout(() => this.showCelebration(), 4000);
+      this.spawnConfetti();
+    }
+
+    showCelebration() {
+      this.celebration.style.display = "flex";
+      setTimeout(()=> this.celebration.style.display="none", 4000);
+    }
+
+    spawnConfetti() {
+      for (let i=0; i<25; i++) {
+        setTimeout(() => {
+          const c = document.createElement("div");
+          c.className="confetti-piece";
+          c.textContent=["🎉","✨","💖","🎊"][Math.floor(Math.random()*4)];
+          c.style.left = Math.random()*window.innerWidth + "px";
+          document.body.appendChild(c);
+          setTimeout(()=>c.remove(),3000);
+        }, i*120);
       }
     }
-    new CrushGame();
+  }
+  new CrushGame();
   </script>
 </body>
 </html>
