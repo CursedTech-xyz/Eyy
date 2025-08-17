@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CRUSH MO BAKO???</title>
+  <style>
+    :root{
+      --bg1:#ff9aa2; --bg2:#fecfef; --glass:rgba(255,255,255,.12);
+      --txt:#fff; --accent:#ff4b6e; --accent-2:#ffd1dc;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; overflow:hidden; color:var(--txt); font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;
+      background: radial-gradient(1000px 600px at 20% 10%, #ffffff08 0%, transparent 60%) , linear-gradient(135deg,var(--bg1),var(--bg2));
+    }
+
+    /* Canvas sits behind UI */
+    #bg{position:fixed; inset:0; z-index:-1;}
+
+    /* Centered glass card */
+    .card{
+      position:relative;
+      width:min(680px,90vw);
+      padding:40px 28px 30px;
+      margin:0 auto;
+      border-radius:24px;
+      background:var(--glass);
+      backdrop-filter: blur(14px) saturate(120%);
+      border:1px solid #ffffff1f;
+      box-shadow:0 10px 40px #00000033, inset 0 1px 0 #ffffff3a;
+      transform:translateY(20px);
+      animation:cardIn .8s cubic-bezier(.2,.7,.2,1) forwards;
+    }
+    @keyframes cardIn{to{opacity:1; transform:translateY(0)}}
+    .title{
+      font-size:clamp(28px,6vw,44px);
+      font-weight:800;
+      letter-spacing:.4px;
+      text-align:center;
+      line-height:1.1;
+      margin:0 0 22px;
+      text-shadow:0 10px 30px #ff3b6a44;
+    }
+    .subtitle{
+      text-align:center; opacity:.9; margin:-6px 0 26px; font-weight:500;
+    }
+
+    /* Buttons row is a free-move arena for dodge */
+    .btn-row{
+      position:relative;
+      height:124px; /* movement area */
+      overflow:visible;
+      display:grid;
+      place-items:center;
+    }
+
+    .btn{
+      position:absolute;
+      padding:14px 22px;
+      border-radius:14px;
+      border:1px solid #ffffff2f;
+      background:#ffffffe6;
+      color:#222;
+      font-weight:700;
+      letter-spacing:.3px;
+      cursor:pointer;
+      transition:
+        box-shadow .3s ease,
+        transform .2s ease;
+      box-shadow:0 10px 30px #00000020, inset 0 -2px 0 #0000000e, inset 0 1px 0 #ffffff;
+      user-select:none;
+      touch-action:none;
+      will-change: transform;
+    }
+    .btn:hover{transform:translateZ(0) scale(1.05)}
+    .btn:active{transform:scale(.98)}
+    .btn-yes{
+      background:linear-gradient(180deg,var(--accent),#ff2d64);
+      color:#fff;
+      box-shadow:0 12px 40px #ff2d6440, inset 0 1px 0 #ffffff55;
+    }
+    .hint{font-size:12px; opacity:.75; text-align:center; margin-top:6px}
+
+    /* Floating praise bubble after YES */
+    .bubble{
+      position:absolute; left:50%; top:50%;
+      translate:-50% -50%;
+      padding:14px 18px; border-radius:999px;
+      background:#ffffffe8; color:#111; font-weight:800;
+      box-shadow:0 10px 30px #00000022;
+      opacity:0; scale:.9;
+      pointer-events:none;
+      animation:bubbleIn .8s cubic-bezier(.2,.8,.2,1) forwards;
+    }
+    @keyframes bubbleIn{to{opacity:1; scale:1}}
+
+    /* Subtle wiggle for fun */
+    @keyframes wiggle{0%,100%{transform:rotate(0)}25%{transform:rotate(2deg)}75%{transform:rotate(-2deg)}}
+
+    /* Tiny heart confetti overlay (DOM, not 3D) */
+    .confetti-heart{
+      position:fixed; font-size:18px; pointer-events:none; filter:drop-shadow(0 4px 10px #00000030);
+      animation:rise 1200ms ease-out forwards;
+    }
+    @keyframes rise{
+      from{transform:translateY(0) scale(.9); opacity:1}
+      to{transform:translateY(-160px) scale(1.2); opacity:0}
+    }
+
+    footer{
+      position:fixed; inset:auto 0 16px; display:grid; place-items:center; pointer-events:none;
+      font-size:12px; opacity:.7;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="bg" aria-hidden="true"></canvas>
+
+  <main class="card" id="card">
+    <h1 class="title">CRUSH MO BAKO??? 😏</h1>
+    <p class="subtitle">Sagot ka na… (pero wag mong abutin ang <em>No</em> 😉)</p>
+
+    <section class="btn-row" id="arena">
+      <!-- Yes sits centered initially -->
+      <button class="btn btn-yes" id="yes" style="inset:auto auto 18px 50%; translate:-50% 0">Yes 💖</button>
+      <button class="btn" id="maybe" style="inset:auto auto 18px calc(50% + 120px)">Maybe 🤔</button>
+      <button class="btn" id="no" style="inset:auto calc(50% + 120px) 18px auto">No 😅</button>
+      <div class="hint">Tip: try to hover/tap the No &amp; Maybe buttons…</div>
+    </section>
+  </main>
+
+  <footer>Made with ❤️ + Three.js</footer>
+
+  <!-- Three.js background + interactions -->
+  <script type="module">
+    import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+
+    // ---------- THREE.JS SCENE ----------
+    const canvas = document.getElementById('bg');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 100);
+    camera.position.set(0, 0, 10);
+
+    const resize = () => {
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      renderer.setPixelRatio(dpr);
+      renderer.setSize(innerWidth, innerHeight);
+      camera.aspect = innerWidth/innerHeight;
+      camera.updateProjectionMatrix();
+    };
+    addEventListener('resize', resize); resize();
+
+    // Soft ambient + directional light
+    scene.add(new THREE.AmbientLight(0xffffff, .85));
+    const dir = new THREE.DirectionalLight(0xff6aa0, .6);
+    dir.position.set(2, 4, 3);
+    scene.add(dir);
+
+    // Create a glossy heart mesh (extruded shape)
+    function makeHeartMesh(color=0xff3b6a, scale=0.04, depth=0.25){
+      const shape = new THREE.Shape();
+      const x=0, y=0;
+      shape.moveTo(x+0, y+0.35);
+      shape.bezierCurveTo(x+0, y+0.5,  -0.35, 0.6, -0.5, 0.35);
+      shape.bezierCurveTo(-0.7, 0.0,   -0.35,-0.25, 0,-0.55);
+      shape.bezierCurveTo(0.35,-0.25,  0.7, 0.0,    0.5, 0.35);
+      shape.bezierCurveTo(0.35,0.6,    0,   0.5,    0,  0.35);
+
+      const geo = new THREE.ExtrudeGeometry(shape,{ depth, bevelEnabled:true, bevelSegments:5, steps:2, bevelSize:.06, bevelThickness:.06 });
+      geo.center();
+      const mat = new THREE.MeshPhysicalMaterial({
+        color, roughness:.3, metalness:.2, transmission:0, clearcoat:.7, clearcoatRoughness:.15
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.scale.setScalar(1/scale); // normalize, then we’ll rescale below
+      const s = scale*16;
+      mesh.scale.set(s, s, s);
+      mesh.rotation.x = -0.3;
+      return mesh;
+    }
+
+    // Background floating hearts (particles)
+    const group = new THREE.Group();
+    scene.add(group);
+    const BG_COUNT = 36;
+    for (let i=0;i<BG_COUNT;i++){
+      const h = makeHeartMesh(0xffffff * Math.random(), 0.055, 0.15);
+      h.position.set(
+        THREE.MathUtils.randFloatSpread(14),
+        THREE.MathUtils.randFloatSpread(8),
+        THREE.MathUtils.randFloat(-6,-1)
+      );
+      h.scale.multiplyScalar(THREE.MathUtils.randFloat(.3,.9));
+      h.userData.speed = THREE.MathUtils.randFloat(.15,.45);
+      group.add(h);
+    }
+
+    // Heart path (parametric): classic cardioid-like heart
+    function heartPoint(t){
+      // t in [0, 2π]
+      const x = 16 * Math.pow(Math.sin(t),3);
+      const y = 13*Math.cos(t) - 5*Math.cos(2*t) - 2*Math.cos(3*t) - Math.cos(4*t);
+      return new THREE.Vector3(x, y, 0).multiplyScalar(0.03); // scale down
+    }
+    // Precompute points for smooth animation
+    const PATH_STEPS = 600;
+    const heartPath = Array.from({length:PATH_STEPS},(_,i)=>heartPoint(i*(Math.PI*2)/PATH_STEPS));
+
+    // Runner heart that moves along the path on YES
+    const runner = makeHeartMesh(0xff2e63, 0.065, 0.22);
+    runner.visible = false;
+    scene.add(runner);
+    let runT = 0;         // 0..1 progress
+    let running = false;
+
+    // Subtle parallax with mouse
+    const parallax = {x:0,y:0};
+    addEventListener('mousemove', e=>{
+      const nx = (e.clientX/innerWidth - .5)*2;
+      const ny = (e.clientY/innerHeight - .5)*2;
+      parallax.x = nx; parallax.y = ny;
+    }, {passive:true});
+
+    // Render loop
+    const clock = new THREE.Clock();
+    renderer.setAnimationLoop(()=>{
+      const t = clock.getElapsedTime();
+
+      // Float background hearts
+      group.children.forEach((h,i)=>{
+        h.rotation.y += 0.004 + i*0.0002;
+        h.rotation.x += 0.002;
+        h.position.y += Math.sin(t*h.userData.speed + i)*0.0025;
+      });
+
+      // Parallax camera
+      camera.position.x = parallax.x * 0.8;
+      camera.position.y = -parallax.y * 0.6;
+      camera.lookAt(0,0,0);
+
+      // Runner heart along path
+      if (running){
+        runT += 0.006; // speed
+        if (runT >= 1) { runT = 0; running = false; runner.visible = false; }
+        const idx = Math.floor(runT * (PATH_STEPS-1));
+        const p = heartPath[idx];
+        const p2 = heartPath[(idx+1) % PATH_STEPS];
+        runner.position.copy(p);
+        // Face tangent direction
+        const dir = p2.clone().sub(p).normalize();
+        runner.lookAt(p.clone().add(dir));
+      }
+
+      renderer.render(scene, camera);
+    });
+
+    // ---------- UI INTERACTIONS ----------
+    const arena = document.getElementById('arena');
+    const yes = document.getElementById('yes');
+    const no = document.getElementById('no');
+    const maybe = document.getElementById('maybe');
+    const card = document.getElementById('card');
+
+    // Smoothly move a button to a random spot within the arena
+    function smoothDodge(btn){
+      const bounds = arena.getBoundingClientRect();
+      const b = btn.getBoundingClientRect();
+      const margin = 10;
+
+      const maxX = bounds.width - b.width - margin;
+      const maxY = bounds.height - b.height - margin;
+
+      const x = Math.random()*maxX + margin;
+      const y = Math.random()*maxY + margin;
+
+      // Use WAAPI for buttery motion
+      const from = btn.animate(
+        [{ transform: getComputedStyle(btn).transform === 'none' ? 'translate(0,0)' : getComputedStyle(btn).transform },
+         { transform: `translate(${x - (b.left - bounds.left)}px, ${y - (b.top - bounds.top)}px)` }],
+        { duration: 380, easing:'cubic-bezier(.22,1,.36,1)', fill:'forwards' }
+      );
+      // Nudge a little wiggle after landing
+      from.onfinish = ()=> btn.animate(
+        [{ transform:`translate(${x - (b.left - bounds.left)}px, ${y - (b.top - bounds.top)}px) rotate(0deg)`},
+         { transform:`translate(${x - (b.left - bounds.left)}px, ${y - (b.top - bounds.top)}px) rotate(2deg)`},
+         { transform:`translate(${x - (b.left - bounds.left)}px, ${y - (b.top - bounds.top)}px) rotate(-2deg)`},
+         { transform:`translate(${x - (b.left - bounds.left)}px, ${y - (b.top - bounds.top)}px) rotate(0deg)`}],
+        { duration: 350, easing:'ease-in-out', iterations:1, fill:'forwards'}
+      );
+    }
+
+    // Make No & Maybe dodge on hover/tap/press
+    ['mouseenter','pointerdown','click','touchstart'].forEach(evt=>{
+      no.addEventListener(evt, e=>{ e.preventDefault(); smoothDodge(no); }, {passive:false});
+      maybe.addEventListener(evt, e=>{ e.preventDefault(); smoothDodge(maybe); }, {passive:false});
+    });
+
+    // Confetti hearts (DOM overlay) helper
+    function spawnConfetti(x,y, n=28){
+      for(let i=0;i<n;i++){
+        const el = document.createElement('div');
+        el.className = 'confetti-heart';
+        el.textContent = Math.random()<.5 ? '❤️' : '💖';
+        const jitterX = (Math.random()-.5)*80;
+        const jitterY = (Math.random()-.5)*10;
+        el.style.left = (x + jitterX) + 'px';
+        el.style.top  = (y + jitterY) + 'px';
+        el.style.fontSize = (16 + Math.random()*12) + 'px';
+        document.body.appendChild(el);
+        setTimeout(()=>el.remove(), 1300);
+      }
+    }
+
+    // YES: start heart path animation + confetti + bubble
+    yes.addEventListener('click', (e)=>{
+      // 3D runner heart along cardioid
+      runner.visible = true; running = true; runT = 0;
+
+      // Bubble text
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = 'ALAM KO NAMAAANNN!!!';
+      card.appendChild(bubble);
+      setTimeout(()=>bubble.remove(), 1400);
+
+      // Confetti hearts at click position
+      spawnConfetti(e.clientX ?? innerWidth/2, e.clientY ?? innerHeight/2, 32);
+    });
+
+    // Extra: initial playful nudge for No/Maybe so they aren’t static
+    setTimeout(()=>{ smoothDodge(no); smoothDodge(maybe); }, 500);
+  </script>
+</body>
+</html>
